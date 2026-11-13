@@ -1,8 +1,9 @@
 package ru.first100days;
 
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.http.ResponseCookie;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
@@ -18,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api")
 public class ProgramController {
-    private static final String PROGRESS = "route-progress";
+    private static final String PROGRESS_COOKIE = "first100_progress";
     private static final List<String> STEPS = List.of("resume", "reply", "interview", "review");
     private static final List<Material> MATERIALS = List.of(
         new Material("plan", "Личный план", "Шаблон на первые недели: цель, сроки и люди, к которым можно обратиться.", "txt", "План"),
@@ -54,22 +55,34 @@ public class ProgramController {
     }
 
     @GetMapping("/progress")
-    public ResponseEntity<Progress> progress(HttpSession session) {
-        Object saved = session.getAttribute(PROGRESS);
-        Progress progress = saved instanceof Progress value ? value : new Progress(List.of());
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(progress);
+    public ResponseEntity<Progress> progress(@CookieValue(name = PROGRESS_COOKIE, defaultValue = "") String value) {
+        List<String> completed = List.of(value.split("\\."));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(normalizeProgress(completed));
     }
 
     @PutMapping(value = "/progress", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Progress> updateProgress(@RequestBody Progress progress, HttpSession session) {
+    public ResponseEntity<Progress> updateProgress(@RequestBody Progress progress, HttpServletRequest request) {
         List<String> completed = progress.completed();
         if (completed == null || completed.size() > STEPS.size() || completed.stream().anyMatch(step -> step == null || !STEPS.contains(step))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown route step");
         }
 
-        Progress saved = new Progress(STEPS.stream().filter(completed::contains).toList());
-        session.setAttribute(PROGRESS, saved);
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(saved);
+        Progress saved = normalizeProgress(completed);
+        ResponseCookie cookie = ResponseCookie.from(PROGRESS_COOKIE, String.join(".", saved.completed()))
+            .path("/api/progress")
+            .httpOnly(true)
+            .secure(request.isSecure())
+            .sameSite("Lax")
+            .maxAge(saved.completed().isEmpty() ? 0 : 8 * 60 * 60)
+            .build();
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header(HttpHeaders.SET_COOKIE, cookie.toString())
+            .body(saved);
+    }
+
+    private Progress normalizeProgress(List<String> completed) {
+        return new Progress(STEPS.stream().filter(completed::contains).toList());
     }
 
     public record Material(String id, String title, String description, String format, String category) {}
