@@ -21,8 +21,8 @@ async function api(path, options) {
   return response.json();
 }
 
-function LinkButton({ to, children, secondary = false }) {
-  return <a className={secondary ? 'button secondary' : 'button'} href={'#' + to}>{children}<span aria-hidden="true">↗</span></a>;
+function LinkButton({ to, children }) {
+  return <a className="button" href={'#' + to}>{children}</a>;
 }
 
 function App() {
@@ -56,14 +56,16 @@ function App() {
   return <>
     <a className="skip" href="#main" onClick={event => { event.preventDefault(); main.current?.focus(); }}>К содержанию</a>
     <header className="header">
-      <div className="shell header-inner">
+      <div className="shell masthead">
         <a className="brand" href="#program" aria-label="Первые 100 дней, главная">
-          <span className="brand-mark" aria-hidden="true">100<span>↗</span></span><span>Первые<br />100 дней</span>
+          <span className="brand-mark" aria-hidden="true">100</span><span>Первые 100 дней</span>
         </a>
-        <nav aria-label="Главное меню">
-          {['program', 'materials', 'contacts'].map(id => <a key={id} href={'#' + id} aria-current={page === id ? 'page' : undefined}>{pages[id]}</a>)}
+        <p>Подготовка к самостоятельной жизни</p>
+      </div>
+      <div className="navigation">
+        <nav className="shell" aria-label="Главное меню">
+          {Object.entries(pages).map(([id, title]) => <a key={id} href={'#' + id} aria-current={page === id ? 'page' : undefined}>{title}</a>)}
         </nav>
-        <a className="header-route" href="#route" aria-current={page === 'route' ? 'page' : undefined}>Маршрут к работе <span aria-hidden="true">↗</span></a>
       </div>
     </header>
     <main id="main" tabIndex={-1} ref={main}>
@@ -83,48 +85,54 @@ function App() {
 }
 
 function Program() {
-  return <>
-    <section className="shell hero">
-      <div className="hero-copy">
-        <p className="kicker">Программа для выпускников детских домов</p>
-        <h1>Первые<br /><em>100 дней</em></h1>
-        <p className="lede">За месяц до выпуска — четыре очных занятия. После выпуска — 100 дней, чтобы сделать первые шаги к своей цели вместе со специалистом.</p>
-        <div className="actions"><LinkButton to="route">Попробовать маршрут</LinkButton><a className="text-link" href="#materials">Открыть материалы</a></div>
-      </div>
-      <figure className="hero-photo">
-        <img src="/ochnoe-zanyatie.webp" alt="Участник и специалист разбирают задание за столом" fetchPriority="high" />
-        <figcaption><span>Участие бесплатное</span><span>Иллюстрация занятия</span></figcaption>
-      </figure>
-    </section>
-    <section className="shell section lessons">
-      <div className="section-intro">
-        <p className="kicker">За месяц до выпуска</p>
-        <h2>Четыре очных занятия</h2>
-        <p>В конце — практическое задание и сертификат участия.</p>
-      </div>
-      <ol className="lesson-grid">
-        {lessons.map(([title, text], index) => <li key={title}><span className="lesson-num">{index + 1}</span><h3>{title}</h3><p>{text}</p></li>)}
-      </ol>
-    </section>
-    <section className="followup">
-      <div className="shell section">
-        <div className="section-intro">
-          <p className="kicker">После выпуска</p>
-          <h2>100 дней со специалистом</h2>
-          <p>Ты выбираешь свою цель. На встречах вы обсуждаете, что уже получилось и с чем нужна помощь.</p>
+  return <div className="shell program-page">
+    <section className="program-intro" aria-labelledby="program-title">
+      <div className="intro-main">
+        <p className="intro-label">Программа для выпускников детских домов</p>
+        <h1 id="program-title">Первые 100 дней</h1>
+        <p>За месяц до выпуска — четыре очных занятия. После выпуска — 100 дней, чтобы сделать первые шаги к своей цели вместе со специалистом.</p>
+        <div className="actions">
+          <LinkButton to="route">Попробовать маршрут</LinkButton>
+          <a className="intro-link" href="#materials">Материалы к занятиям</a>
         </div>
-        <ol className="meeting-grid">
-          {meetings.map(([day, title, text]) => <li key={day}><span className="day">День {day}</span><h3>{title}</h3><p>{text}</p></li>)}
-        </ol>
-        <LinkButton to="route" secondary>Посмотреть маршрут к работе</LinkButton>
       </div>
+      <aside className="program-facts" aria-labelledby="facts-title">
+        <h2 id="facts-title">Об участии</h2>
+        <dl>
+          <div><dt>Формат</dt><dd>Занятия в группе и личные встречи со специалистом</dd></div>
+          <div><dt>Стоимость</dt><dd>Бесплатно</dd></div>
+          <div><dt>Первый запуск</dt><dd>Ульяновская область</dd></div>
+        </dl>
+      </aside>
     </section>
-    <section className="shell section pilot">
-      <div><p className="kicker">Первый запуск</p><h2>Пилот в Ульяновской области</h2></div>
-      <div><p>Планируем провести занятия для одной группы до десяти человек. Команда готовит материалы и организует занятия, а сотрудник учреждения ведёт сопровождение. Площадку и ответственных предстоит согласовать.</p>
-      <p>Для пилота предусмотрена предварительная смета 32 600 ₽. На 30-й день проверим первый шаг, а к концу программы подведём итоги по откликам, собеседованиям, предложениям и трудоустройствам участников, выбравших поиск работы.</p></div>
+
+    <div className="program-columns">
+      <section className="program-section" aria-labelledby="lessons-title">
+        <h2 id="lessons-title">Четыре очных занятия</h2>
+        <p className="section-lede">За месяц до выпуска разбираем задачи, с которыми можно столкнуться в первые недели.</p>
+        <ol className="lesson-list">
+          {lessons.map(([title, text]) => <li key={title}><h3>{title}</h3><p>{text}</p></li>)}
+        </ol>
+        <p className="course-note">В конце — практическое задание и сертификат участия.</p>
+      </section>
+
+      <section className="program-section" aria-labelledby="meetings-title">
+        <h2 id="meetings-title">Встречи после выпуска</h2>
+        <p className="section-lede">Ты выбираешь свою цель. На встречах вы обсуждаете, что уже получилось и с чем нужна помощь.</p>
+        <ol className="meeting-list">
+          {meetings.map(([day, title, text]) => <li key={day}>
+            <span className="day">День {day}</span><div><h3>{title}</h3><p>{text}</p></div>
+          </li>)}
+        </ol>
+      </section>
+    </div>
+
+    <section className="launch" aria-labelledby="launch-title">
+      <h2 id="launch-title">Первый запуск в Ульяновской области</h2>
+      <p>Планируем провести занятия для одной группы до десяти человек. Команда готовит материалы и организует занятия, а сотрудник учреждения ведёт сопровождение. Площадку и ответственных предстоит согласовать.</p>
+      <p>Предварительная смета — 32 600 ₽. На 30-й день проверим первый шаг, а к концу программы подведём итоги по откликам, собеседованиям, предложениям и трудоустройствам участников, выбравших поиск работы.</p>
     </section>
-  </>;
+  </div>;
 }
 
 function PageIntro({ title, children }) {
@@ -143,7 +151,7 @@ function Materials({ items, error, retry }) {
     <div className="material-list">
       {items?.map(item => <article key={item.id} className="material">
         <span className="material-format">{item.format.toUpperCase()}</span>
-        <div><p className="kicker">{item.category}</p><h2>{item.title}</h2><p>{item.description}</p></div>
+        <div><p className="item-category">{item.category}</p><h2>{item.title}</h2><p>{item.description}</p></div>
         <a className="button secondary" download href={'/api/materials/' + item.id + '/download'} aria-label={'Скачать «' + item.title + '»'}>Скачать <span aria-hidden="true">↓</span></a>
       </article>)}
     </div>
@@ -158,7 +166,7 @@ function Contacts({ catalog, error, retry }) {
         <h2>Команда проекта</h2>
         <p>Кирилл Проконов и Степан Филиппов готовят занятия и материалы для первого запуска.</p>
         {catalog?.contactEmail && <a className="text-link" href={'mailto:' + catalog.contactEmail}>Написать команде ↗</a>}
-        {catalog && !catalog.contactEmail && <p className="quiet">Контакт команды появится после согласования пилота.</p>}
+        {catalog && !catalog.contactEmail && <p className="quiet">Контакт команды опубликуем, когда согласуем первый запуск.</p>}
         {!catalog && !error && <p role="status">Проверяем контакт…</p>}
         {error && <LoadError retry={retry}>Контакт команды не загрузился.</LoadError>}
       </article>
@@ -227,13 +235,13 @@ function Route() {
       </section>
       <aside className="route-aside">
         <article className="sample">
-          <p className="kicker">Учебная вакансия</p><h2>Помощник в книжном магазине</h2>
+          <p className="item-category">Учебная вакансия</p><h2>Помощник в книжном магазине</h2>
           <p>Разбирать поставки, раскладывать книги и помогать покупателям. Опыт не требуется.</p>
           <details><summary>Показать пример отклика</summary><p>Здравствуйте! Хочу откликнуться на вакансию помощника. На практике я работал с таблицами и помогал распределять материалы. Готов учиться и могу выйти на пробную смену после учёбы.</p></details>
           <label className="draft-label" htmlFor="draft">Попробуй написать отклик</label>
           <textarea id="draft" maxLength={600} rows={4} value={draft}
             onChange={event => setDraft(event.target.value)} aria-describedby="draft-tip" />
-          <p className="quiet" id="draft-tip">Учебный черновик. Оставь имя и контакты за скобками. Текст исчезнет, когда закроешь маршрут.</p>
+          <p className="quiet" id="draft-tip">Учебный черновик. Можно обойтись без имени и контактов. Черновик исчезнет, когда закроешь маршрут.</p>
         </article>
         <section className="route-meeting" aria-labelledby="meeting-title">
           <h2 id="meeting-title">Встречи со специалистом</h2>
