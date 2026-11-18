@@ -267,7 +267,18 @@ class Bot:
             self.s.execute("UPDATE members SET role=? WHERE id=?", (parts[1], user_id))
             self.menu(user_id)
         elif data == "about":
-            self.send(user_id, "<b>До выпуска и после</b>\n\nЗа месяц до выпуска планируем четыре очных занятия: первые недели, деньги, квитанции, первая работа. После выпуска — личная цель и встречи со специалистом в дни 1, 14, 30, 60 и 100.\n\nДля участников программа бесплатная. Первый запуск и специалистов ещё согласовываем. Подача заявки помогает команде связаться с тобой, участие подтверждает координатор.", [[button("Меню", "menu")]])
+            user = self.member(user_id)
+            if user["consent_at"] or user["employer_consent_at"]:
+                next_button = button("Подать заявку", "new:request")
+            else:
+                next_button = button("Подать заявку", "register:" + user["role"])
+            self.send(
+                user_id,
+                "<b>Первые 100 дней</b>\n\n"
+                "Помогаем с первой работой и бытовыми вопросами.\n\n"
+                "Оставь заявку — координатор ответит здесь, в Telegram. Участие бесплатное.",
+                [[next_button], [button("Меню", "menu")]],
+            )
         elif data == "privacy":
             self.privacy(user_id)
         elif action == "register" and len(parts) == 2 and parts[1] in ("participant", "employer"):
