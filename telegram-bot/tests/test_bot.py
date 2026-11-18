@@ -218,7 +218,7 @@ class BotTest(unittest.TestCase):
         payload = self.last(2)
         buttons = [item for row in payload["reply_markup"]["inline_keyboard"] for item in row]
         self.assertEqual(len([item for item in buttons if item["callback_data"].startswith("application:")]), 5)
-        self.assertTrue(any(item["text"] == "Следующие →" for item in buttons))
+        self.assertTrue(any(item["text"] == "➡️ Следующие" for item in buttons))
         self.action(2, f"applicants:{job}:1")
         buttons = [item for row in self.last(2)["reply_markup"]["inline_keyboard"] for item in row]
         self.assertEqual(len([item for item in buttons if item["callback_data"].startswith("application:")]), 2)
