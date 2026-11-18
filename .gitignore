@@ -7,3 +7,7 @@ target/
 *.log
 .vercel/
 *.jar
+!**/.env.example
+__pycache__/
+*.pyc
+telegram-bot/data/
