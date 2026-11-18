@@ -5,6 +5,8 @@ import json
 import secrets
 import time
 
+TEXT_DASHES = str.maketrans({0x2013: "-", 0x2014: "-"})
+
 AGES = ("До 14 лет", "14–15 лет", "16–17 лет", "18 лет и старше")
 TOPICS = ("Участие в программе", "Поиск работы", "Резюме и собеседование", "Бюджет и бытовые вопросы", "Другой вопрос")
 STATES = {"new": "Получена", "in_progress": "В работе", "done": "Завершена", "withdrawn": "Отозвана", "invited": "Приглашение", "rejected": "Отказ"}
@@ -126,7 +128,7 @@ BUTTON_ICONS = {
 
 
 def button(label, data):
-    label = label.removeprefix("← ").removesuffix(" →")
+    label = label.removeprefix("← ").removesuffix(" →").translate(TEXT_DASHES)
     action = data.split(":", 1)[0]
     icon = BUTTON_ICONS.get(label)
     if icon is None:
@@ -144,7 +146,7 @@ class Bot:
         self.config = config
 
     def send(self, user_id, body, rows=None):
-        payload = {"chat_id": user_id, "text": body, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
+        payload = {"chat_id": user_id, "text": body.translate(TEXT_DASHES), "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
         if rows:
             payload["reply_markup"] = {"inline_keyboard": rows}
         self.s.enqueue("sendMessage", payload)
@@ -191,7 +193,7 @@ class Bot:
         value = message.get("text", "").strip()
         command = value.split(maxsplit=1)[0].split("@")[0].lower() if value else ""
         if command == "/id":
-            self.send(user_id, f"Твой Telegram ID — <code>{user_id}</code>.\nДля работы в кабинете координатора добавьте этот ID в TELEGRAM_ADMIN_IDS.")
+            self.send(user_id, f"Твой Telegram ID - <code>{user_id}</code>.\nДля работы в кабинете координатора добавьте этот ID в TELEGRAM_ADMIN_IDS.")
         elif command in ("/start", "/menu"):
             self.menu(user_id)
         elif command == "/admin":
@@ -199,7 +201,7 @@ class Bot:
         elif command == "/privacy":
             self.privacy(user_id)
         elif command == "/help":
-            self.send(user_id, "<b>Как пользоваться ботом</b>\n\nВыбери роль и заполни короткую анкету. После регистрации можно отправить заявку или отклик.\n\n/menu — открыть меню\n/cancel — отменить заполнение\n/id — узнать свой ID\n/privacy — какие данные сохраняются\n\nЕсли ошибся в анкете, нажми «Назад». Перед отправкой покажу всё целиком.", [[button("Открыть меню", "menu")]])
+            self.send(user_id, "<b>Как пользоваться ботом</b>\n\nВыбери роль и заполни короткую анкету. После регистрации можно отправить заявку или отклик.\n\n/menu - открыть меню\n/cancel - отменить заполнение\n/id - узнать свой ID\n/privacy - какие данные сохраняются\n\nЕсли ошибся в анкете, нажми «Назад». Перед отправкой покажу всё целиком.", [[button("Открыть меню", "menu")]])
         elif command == "/cancel":
             if self.flow(user_id):
                 self.cancel_prompt(user_id)
@@ -276,7 +278,7 @@ class Bot:
                 user_id,
                 "<b>Первые 100 дней</b>\n\n"
                 "Помогаем с первой работой и бытовыми вопросами.\n\n"
-                "Оставь заявку — координатор ответит здесь, в Telegram. Участие бесплатное.",
+                "Оставь заявку - координатор ответит здесь, в Telegram. Участие бесплатное.",
                 [[next_button], [button("Меню", "menu")]],
             )
         elif data == "privacy":
@@ -295,7 +297,7 @@ class Bot:
             if parts[1] == "vacancy" and user["employer_status"] != "approved":
                 self.send(user_id, "Публиковать вакансии можно после проверки организации.", [[button("Меню", "menu")]])
             elif parts[1] == "request" and not (user["consent_at"] or user["employer_consent_at"]):
-                self.send(user_id, "Сначала заполни анкету — так координатор поймёт, кому отвечает.", [[button("Регистрация участника", "register:participant"), button("Работодатель", "register:employer")]])
+                self.send(user_id, "Сначала заполни анкету - так координатор поймёт, кому отвечает.", [[button("Регистрация участника", "register:participant"), button("Работодатель", "register:employer")]])
             else:
                 self.begin(user_id, parts[1])
         elif action in ("jobs", "ownjobs", "applications") and len(parts) == 2 and parts[1].isdigit():
@@ -355,7 +357,7 @@ class Bot:
             return
         fields = FORMS[kind]
         if step == len(fields):
-            summary = "\n".join(f"<b>{field.label}</b> — {text(data[field.key])}" for field in fields)
+            summary = "\n".join(f"<b>{field.label}</b> - {text(data[field.key])}" for field in fields)
             note = ""
             if kind == "apply":
                 user = self.member(user_id)
@@ -418,10 +420,10 @@ class Bot:
         user = self.member(user_id)
         employer = user["role"] == "employer"
         fields = FORMS["employer" if employer else "participant"]
-        body = "\n".join(f"<b>{field.label}</b> — {text(user[field.key] or 'Не заполнено')}" for field in fields)
+        body = "\n".join(f"<b>{field.label}</b> - {text(user[field.key] or 'Не заполнено')}" for field in fields)
         rows = [[button("Меню", "menu")]]
         if employer:
-            body += "\n<b>Проверка</b> — " + EMPLOYERS[user["employer_status"]]
+            body += "\n<b>Проверка</b> - " + EMPLOYERS[user["employer_status"]]
         else:
             rows.insert(0, [button("Изменить анкету", "register:participant")])
         self.send(user_id, "<b>Моя организация</b>\n\n" + body if employer else "<b>Моя анкета</b>\n\n" + body, rows)
@@ -484,7 +486,7 @@ class Bot:
         cursor = self.s.execute("INSERT INTO applications(user_id,vacancy_id,topic,body,snapshot,created_at) VALUES (?,?,?,?,?,?)", (user_id, vacancy_id, data.get("topic", "Отклик на вакансию"), data["body"], json.dumps(snapshot, ensure_ascii=False), int(time.time())))
         app_id = cursor.lastrowid
         rows = [[button("Открыть заявку", f"application:{app_id}")]]
-        self.send(user_id, f"<b>Заявка №{app_id} отправлена</b>\n\nСтатус — получена. Ответ придёт сюда. Следить за заявкой можно в меню.", rows)
+        self.send(user_id, f"<b>Заявка №{app_id} отправлена</b>\n\nСтатус - получена. Ответ придёт сюда. Следить за заявкой можно в меню.", rows)
         self.admins(f"<b>Новая заявка №{app_id}</b>\n" + text(data.get("topic", "Отклик на вакансию")), rows)
         if vacancy_id:
             self.send(job["employer_id"], f"<b>Новый отклик №{app_id}</b>\nНа вакансию «{text(job['title'])}».", rows)
@@ -544,7 +546,7 @@ class Bot:
             self.send(user_id, "Вакансия недоступна.")
             return
         body = (f"<b>{text(job['title'])}</b>\n{text(job['company'])}\n\n"
-                f"Город — {text(job['city'])}\nГрафик — {text(job['schedule'])}\nОплата — {text(job['pay'])}\nВозраст — {text(job['age'])}\n\n{text(job['description'])}\n\nСтатус — {JOBS[job['status']]}")
+                f"Город - {text(job['city'])}\nГрафик - {text(job['schedule'])}\nОплата - {text(job['pay'])}\nВозраст - {text(job['age'])}\n\n{text(job['description'])}\n\nСтатус - {JOBS[job['status']]}")
         rows = []
         if admin and job["status"] == "pending":
             rows.append([button("Опубликовать", f"approve_vacancy:{vacancy_id}"), button("Отклонить", f"reject_vacancy:{vacancy_id}")])
@@ -637,7 +639,7 @@ class Bot:
         if counts[3]:
             rows.append([button("Повторить доставку сообщений", "retry_notifications")])
         rows.append([button("Меню", "menu")])
-        self.send(user_id, f"<b>Кабинет координатора</b>\n\nОрганизации на проверке — {counts[0]}\nВакансии на проверке — {counts[1]}\nАктивные заявки — {counts[2]}\nНедоставленные сообщения — {counts[3]}", rows)
+        self.send(user_id, f"<b>Кабинет координатора</b>\n\nОрганизации на проверке - {counts[0]}\nВакансии на проверке - {counts[1]}\nАктивные заявки - {counts[2]}\nНедоставленные сообщения - {counts[3]}", rows)
 
     def queue(self, user_id, kind, page):
         if user_id not in self.config.admin_ids:
@@ -671,7 +673,7 @@ class Bot:
             self.s.execute("UPDATE applications SET status=? WHERE id=?", (status, item_id))
             message = ("Работодатель пригласил тебя обсудить вакансию. Координатор поможет согласовать встречу." if action == "invite" else "Работодатель завершил рассмотрение этого отклика. Координатор поможет выбрать следующий шаг.")
             self.send(app["user_id"], f"<b>Отклик №{item_id}</b>\n{text(job['title'])}\n\n{message}", [[button("Нужна помощь", "new:request"), button("Мои заявки", "applications:0")]])
-            self.admins(f"Отклик №{item_id} — {STATES[status]}.", [[button("Открыть", f"application:{item_id}")]])
+            self.admins(f"Отклик №{item_id} - {STATES[status]}.", [[button("Открыть", f"application:{item_id}")]])
             self.application(user_id, item_id)
             return
         if user_id not in self.config.admin_ids:
