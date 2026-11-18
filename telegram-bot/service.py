@@ -10,8 +10,8 @@ TEXT_DASHES = str.maketrans({0x2013: "-", 0x2014: "-"})
 AGES = ("До 14 лет", "14–15 лет", "16–17 лет", "18 лет и старше")
 TOPICS = ("Участие в программе", "Поиск работы", "Резюме и собеседование", "Бюджет и бытовые вопросы", "Другой вопрос")
 STATES = {"new": "Получена", "in_progress": "В работе", "done": "Завершена", "withdrawn": "Отозвана", "invited": "Приглашение", "rejected": "Отказ"}
-EMPLOYERS = {"none": "Не заполнена", "pending": "На проверке", "approved": "Подтверждена", "rejected": "Нужны уточнения"}
-JOBS = {"pending": "На проверке", "approved": "Опубликована", "rejected": "Отклонена", "closed": "Закрыта"}
+EMPLOYERS = {"none": "Не заполнена", "pending": "На проверке", "approved": "Подтверждена", "rejected": "Нужны уточнения", "catalog": "Из открытых источников"}
+JOBS = {"pending": "На проверке", "approved": "Опубликована", "rejected": "Отклонена", "closed": "Закрыта", "catalog": "Из открытых источников"}
 
 
 @dataclass(frozen=True)
@@ -101,6 +101,8 @@ BUTTON_ICONS = {
     "Регистрация": "📝",
     "Кабинет координатора": "🛠️",
     "Организации": "🏢",
+    "Участники": "👥",
+    "Помочь с откликом": "✉️",
     "Заявки и отклики": "📨",
     "Повторить доставку сообщений": "🔄",
     "Ответить": "💬",
@@ -132,7 +134,7 @@ def button(label, data):
     action = data.split(":", 1)[0]
     icon = BUTTON_ICONS.get(label)
     if icon is None:
-        icon = {"job": "💼", "application": "📨", "employer": "🏢", "applicants": "📨"}.get(action, "📂")
+        icon = {"job": "💼", "application": "📨", "employer": "🏢", "participant": "👤", "applicants": "📨"}.get(action, "📂")
     return {"text": f"{icon} {label}", "callback_data": data}
 
 
@@ -146,6 +148,9 @@ class Bot:
         self.config = config
 
     def send(self, user_id, body, rows=None):
+        # Imported companies and fictional participants are never Telegram recipients.
+        if user_id <= 0:
+            return
         payload = {"chat_id": user_id, "text": body.translate(TEXT_DASHES), "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
         if rows:
             payload["reply_markup"] = {"inline_keyboard": rows}
@@ -183,7 +188,7 @@ class Bot:
         if not sender or not message or message.get("chat", {}).get("type") != "private" or sender.get("is_bot"):
             return
         user_id = sender["id"]
-        if message["chat"]["id"] != user_id:
+        if user_id <= 0 or message["chat"]["id"] != user_id:
             return
         self.s.execute("INSERT OR IGNORE INTO members(id,created_at) VALUES (?,?)", (user_id, int(time.time())))
         if callback:
@@ -325,9 +330,11 @@ class Bot:
                 self.send(user_id, "Это действие доступно координатору.")
         elif action == "queue" and len(parts) == 3 and parts[2].isdigit():
             self.queue(user_id, parts[1], int(parts[2]))
+        elif action == "participant" and len(parts) == 2 and parts[1].lstrip("-").isdigit():
+            self.participant_card(user_id, int(parts[1]))
         elif action in ("approve_employer", "reject_employer") and len(parts) == 3 and all(part.isdigit() for part in parts[1:]):
             self.management(user_id, action, int(parts[1]), int(parts[2]))
-        elif action in ("employer", "approve_vacancy", "reject_vacancy", "reply", "take", "done", "invite", "reject") and len(parts) == 2 and parts[1].isdigit():
+        elif action in ("employer", "approve_vacancy", "reject_vacancy", "reply", "take", "done", "invite", "reject") and len(parts) == 2 and (parts[1].isdigit() or (action == "employer" and parts[1].lstrip("-").isdigit())):
             self.management(user_id, action, int(parts[1]))
         else:
             self.send(user_id, "Кнопка устарела. Открой меню.", [[button("Меню", "menu")]])
@@ -362,6 +369,9 @@ class Bot:
             if kind == "apply":
                 user = self.member(user_id)
                 note = f"\n\nРаботодателю будут переданы имя {text(user['name'])}, возрастная группа {text(user['age'])}, город {text(user['city'])} и этот отклик."
+                job = self.s.one("SELECT status FROM vacancies WHERE id=?", (data["vacancy_id"],))
+                if job and job["status"] == "catalog":
+                    note = "\n\nАнкету и отклик получит координатор. Компания пока не подключена к боту. Координатор поможет связаться с ней."
             self.send(user_id, "<b>Проверь перед отправкой</b>\n\n" + summary + note, [[button("Отправить", prefix + "send")], [button("Назад · Исправить", prefix + "back"), button("Отмена", prefix + "cancel_prompt")]])
             return
         field = fields[step]
@@ -486,14 +496,15 @@ class Bot:
         cursor = self.s.execute("INSERT INTO applications(user_id,vacancy_id,topic,body,snapshot,created_at) VALUES (?,?,?,?,?,?)", (user_id, vacancy_id, data.get("topic", "Отклик на вакансию"), data["body"], json.dumps(snapshot, ensure_ascii=False), int(time.time())))
         app_id = cursor.lastrowid
         rows = [[button("Открыть заявку", f"application:{app_id}")]]
-        self.send(user_id, f"<b>Заявка №{app_id} отправлена</b>\n\nСтатус - получена. Ответ придёт сюда. Следить за заявкой можно в меню.", rows)
+        recipient_note = "Координатор поможет связаться с компанией. " if vacancy_id and job["status"] == "catalog" else ""
+        self.send(user_id, f"<b>Заявка №{app_id} отправлена</b>\n\n{recipient_note}Статус - получена. Ответ придёт сюда. Следить за заявкой можно в меню.", rows)
         self.admins(f"<b>Новая заявка №{app_id}</b>\n" + text(data.get("topic", "Отклик на вакансию")), rows)
         if vacancy_id:
             self.send(job["employer_id"], f"<b>Новый отклик №{app_id}</b>\nНа вакансию «{text(job['title'])}».", rows)
 
     def eligible_job(self, user_id, vacancy_id):
         user = self.member(user_id)
-        job = self.s.one("SELECT * FROM vacancies WHERE id=? AND status='approved'", (vacancy_id,))
+        job = self.s.one("SELECT * FROM vacancies WHERE id=? AND status IN ('approved','catalog')", (vacancy_id,))
         if not job or not user["consent_at"] or user_id == job["employer_id"]:
             return None
         return job if AGES.index(user["age"]) >= AGES.index(job["age"]) else None
@@ -519,7 +530,7 @@ class Bot:
                 return
             ages = AGES[1:AGES.index(user["age"]) + 1]
             placeholders = ",".join("?" for _ in ages) or "NULL"
-            items = self.s.all(f"SELECT id,title FROM vacancies WHERE status='approved' AND age IN ({placeholders}) AND employer_id<>? ORDER BY id DESC LIMIT 6 OFFSET ?", (*ages, user_id, page * 5))
+            items = self.s.all(f"SELECT id,title FROM vacancies WHERE status IN ('approved','catalog') AND age IN ({placeholders}) AND employer_id<>? ORDER BY id DESC LIMIT 6 OFFSET ?", (*ages, user_id, page * 5))
             title, prefix = "Вакансии", "job"
             empty = "Подходящих вакансий пока нет. Можно оставить заявку на помощь с поиском работы."
         elif kind == "ownjobs":
@@ -542,12 +553,16 @@ class Bot:
     def job(self, user_id, vacancy_id):
         job = self.s.one("SELECT * FROM vacancies WHERE id=?", (vacancy_id,))
         admin = user_id in self.config.admin_ids
-        if not job or (job["status"] != "approved" and job["employer_id"] != user_id and not admin):
+        if not job or (job["status"] not in ("approved", "catalog") and job["employer_id"] != user_id and not admin):
             self.send(user_id, "Вакансия недоступна.")
             return
+        age = "Уточняется у компании" if job["source_url"] else job["age"]
         body = (f"<b>{text(job['title'])}</b>\n{text(job['company'])}\n\n"
-                f"Город - {text(job['city'])}\nГрафик - {text(job['schedule'])}\nОплата - {text(job['pay'])}\nВозраст - {text(job['age'])}\n\n{text(job['description'])}\n\nСтатус - {JOBS[job['status']]}")
+                f"Город - {text(job['city'])}\nГрафик - {text(job['schedule'])}\nОплата - {text(job['pay'])}\nВозраст - {text(age)}\n\n{text(job['description'])}\n\nСтатус - {JOBS[job['status']]}")
         rows = []
+        if job["source_url"]:
+            body += f"\n\nПодборка от {text(job['source_checked_on'])}. Компания пока не подключена к боту. Наличие места и условия уточняются."
+            rows.append([{"text": "🔗 Источник", "url": job["source_url"]}])
         if admin and job["status"] == "pending":
             rows.append([button("Опубликовать", f"approve_vacancy:{vacancy_id}"), button("Отклонить", f"reject_vacancy:{vacancy_id}")])
         if job["employer_id"] == user_id or admin:
@@ -556,7 +571,7 @@ class Bot:
             if job["employer_id"] == user_id and job["status"] in ("pending", "approved"):
                 rows.append([button("Закрыть вакансию", f"closejob:{vacancy_id}")])
         elif self.eligible_job(user_id, vacancy_id):
-            rows.append([button("Откликнуться", f"apply:{vacancy_id}")])
+            rows.append([button("Помочь с откликом" if job["status"] == "catalog" else "Откликнуться", f"apply:{vacancy_id}")])
         rows.append([button("Меню", "menu")])
         self.send(user_id, body, rows)
 
@@ -591,18 +606,27 @@ class Bot:
         snapshot = json.loads(app["snapshot"])
         identity = snapshot["name"] or snapshot["contact"]
         body = f"<b>Заявка №{app_id} · {STATES[app['status']]}</b>\n{text(app['topic'])}\n\n{text(identity)}"
+        if app["is_demo"]:
+            body = "🧪 <b>Учебный пример · вымышленные данные</b>\n\n" + body
         if snapshot["age"]:
             body += " · " + text(snapshot["age"]) + " · " + text(snapshot["city"])
         body += "\n\n" + text(app["body"])
+        job = self.s.one("SELECT title,company,status FROM vacancies WHERE id=?", (app["vacancy_id"],)) if app["vacancy_id"] else None
+        if job:
+            body += f"\n\n<b>Вакансия</b>\n{text(job['title'])} · {text(job['company'])}"
+            if job["status"] == "catalog":
+                body += "\nОтклик передан координатору. Компания пока не подключена к боту."
         if app["response"]:
             body += "\n\n<b>Ответ координатора</b>\n" + text(app["response"])
         rows = []
+        if job:
+            rows.append([button("К вакансии", f"job:{app['vacancy_id']}")])
         active = app["status"] in ("new", "in_progress", "invited")
         if user_id in self.config.admin_ids and active:
             rows.append([button("Ответить", f"reply:{app_id}")])
             if app["status"] == "new":
                 rows.append([button("Взять в работу", f"take:{app_id}")])
-            if not app["vacancy_id"]:
+            if not app["vacancy_id"] or app["employer_id"] < 0:
                 rows.append([button("Завершить", f"done:{app_id}")])
         if user_id == app["employer_id"] and app["status"] in ("new", "in_progress"):
             rows.append([button("Пригласить", f"invite:{app_id}"), button("Отказать", f"reject:{app_id}")])
@@ -632,35 +656,65 @@ class Bot:
         counts = [self.s.one(sql)[0] for sql in (
             "SELECT COUNT(*) FROM members WHERE employer_status='pending'",
             "SELECT COUNT(*) FROM vacancies WHERE status='pending'",
-            "SELECT COUNT(*) FROM applications WHERE status IN ('new','in_progress','invited')",
+            "SELECT COUNT(*) FROM applications WHERE is_demo=0 AND status IN ('new','in_progress','invited')",
             "SELECT COUNT(*) FROM outbox WHERE status='failed'",
         )]
-        rows = [[button("Организации", "queue:employers:0"), button("Вакансии", "queue:vacancies:0")], [button("Заявки и отклики", "queue:applications:0")]]
+        totals = [self.s.one(sql)[0] for sql in (
+            "SELECT COUNT(*) FROM members WHERE consent_at IS NOT NULL AND origin='telegram'",
+            "SELECT COUNT(*) FROM members WHERE origin='demo'",
+            "SELECT COUNT(*) FROM members WHERE origin='catalog'",
+            "SELECT COUNT(*) FROM applications WHERE is_demo=1",
+            "SELECT COUNT(*) FROM vacancies WHERE status='catalog'",
+        )]
+        rows = [[button("Организации", "queue:employers:0"), button("Вакансии", "queue:vacancies:0")], [button("Участники", "queue:participants:0"), button("Заявки и отклики", "queue:applications:0")]]
         if counts[3]:
             rows.append([button("Повторить доставку сообщений", "retry_notifications")])
         rows.append([button("Меню", "menu")])
-        self.send(user_id, f"<b>Кабинет координатора</b>\n\nОрганизации на проверке - {counts[0]}\nВакансии на проверке - {counts[1]}\nАктивные заявки - {counts[2]}\nНедоставленные сообщения - {counts[3]}", rows)
+        self.send(user_id, f"<b>Кабинет координатора</b>\n\nОрганизации на проверке - {counts[0]}\nВакансии на проверке - {counts[1]}\nАктивные заявки - {counts[2]}\nУчастники - {totals[0]}\nНедоставленные сообщения - {counts[3]}\n\n<b>Каталог</b>\nОрганизации - {totals[2]}\nВакансии - {totals[4]}\n\n<b>Учебные примеры</b>\nУчастники - {totals[1]}\nЗаявки - {totals[3]}", rows)
+
+    def participant_card(self, user_id, participant_id):
+        if user_id not in self.config.admin_ids:
+            self.send(user_id, "Это действие доступно координатору.")
+            return
+        person = self.member(participant_id)
+        if not person or not (person["consent_at"] or person["origin"] == "demo"):
+            self.send(user_id, "Анкета недоступна.")
+            return
+        badge = "🧪 <b>Учебный пример · вымышленные данные</b>\n\n" if person["origin"] == "demo" else ""
+        body = "\n".join(f"<b>{field.label}</b> - {text(person[field.key])}" for field in FORMS["participant"])
+        self.send(user_id, badge + "<b>Анкета участника</b>\n\n" + body, [[button("Участники", "queue:participants:0"), button("Кабинет координатора", "admin")]])
 
     def queue(self, user_id, kind, page):
         if user_id not in self.config.admin_ids:
             self.send(user_id, "Это действие доступно координатору.")
             return
         queries = {
-            "employers": ("SELECT id,company AS title FROM members WHERE employer_status='pending' ORDER BY id LIMIT 6 OFFSET ?", "employer"),
-            "vacancies": ("SELECT id,title FROM vacancies WHERE status='pending' ORDER BY id LIMIT 6 OFFSET ?", "job"),
-            "applications": ("SELECT id,topic AS title FROM applications WHERE status IN ('new','in_progress','invited') ORDER BY id DESC LIMIT 6 OFFSET ?", "application"),
+            "employers": ("SELECT id,company AS title,employer_status AS status FROM members WHERE employer_status<>'none' ORDER BY (employer_status='pending') DESC,company,id LIMIT 6 OFFSET ?", "employer"),
+            "vacancies": ("SELECT id,title,status FROM vacancies ORDER BY (status='pending') DESC,id DESC LIMIT 6 OFFSET ?", "job"),
+            "applications": ("SELECT id,topic AS title,status,is_demo FROM applications ORDER BY is_demo,id DESC LIMIT 6 OFFSET ?", "application"),
+            "participants": ("SELECT id,name AS title,origin FROM members WHERE consent_at IS NOT NULL OR origin='demo' ORDER BY (origin='demo'),name,id LIMIT 6 OFFSET ?", "participant"),
         }
         if kind not in queries:
             return
         sql, prefix = queries[kind]
         items = self.s.all(sql, (page * 5,))
-        rows = [[button(f"№{item['id']} · {item['title'][:38]}", f"{prefix}:{item['id']}")] for item in items[:5]]
+        rows = []
+        for item in items[:5]:
+            label = item["title"][:32]
+            if kind == "applications":
+                label = ("Учебная · " if item["is_demo"] else "") + f"№{item['id']} · {STATES[item['status']]}"
+            elif kind == "participants" and item["origin"] == "demo":
+                label += " · учебный пример"
+            elif kind in ("employers", "vacancies"):
+                label += " · " + (EMPLOYERS if kind == "employers" else JOBS)[item["status"]]
+            rows.append([button(label, f"{prefix}:{item['id']}")])
         if page:
             rows.append([button("← Предыдущие", f"queue:{kind}:{page - 1}")])
         if len(items) > 5:
             rows.append([button("Следующие →", f"queue:{kind}:{page + 1}")])
         rows.append([button("Кабинет координатора", "admin")])
-        self.send(user_id, "<b>Очередь на обработку</b>\n\n" + ("Выберите карточку." if items else "Здесь пока пусто."), rows)
+        title = {"employers": "Организации", "vacancies": "Вакансии", "participants": "Участники", "applications": "Заявки и отклики"}[kind]
+        self.send(user_id, f"<b>{title} · страница {page + 1}</b>\n\n" + ("Выберите карточку." if items else "Здесь пока пусто."), rows)
 
     def management(self, user_id, action, item_id, revision=None):
         if action in ("invite", "reject"):
@@ -681,7 +735,7 @@ class Bot:
             return
         if action in ("employer", "approve_employer", "reject_employer"):
             employer = self.member(item_id)
-            if not employer or employer["employer_status"] != "pending":
+            if not employer or employer["employer_status"] == "none" or (action != "employer" and employer["employer_status"] != "pending"):
                 self.send(user_id, "Организация уже проверена или недоступна.")
                 return
             if action != "employer" and revision != employer["employer_consent_at"]:
@@ -689,7 +743,13 @@ class Bot:
                 return
             if action == "employer":
                 version = employer["employer_consent_at"]
-                self.send(user_id, f"<b>Проверка организации</b>\n\n{text(employer['company'])}\n{text(employer['contact'])}\n{text(employer['employer_city'])}", [[button("Подтвердить", f"approve_employer:{item_id}:{version}"), button("Запросить уточнение", f"reject_employer:{item_id}:{version}")]])
+                rows = []
+                if employer["employer_status"] == "pending":
+                    rows.append([button("Подтвердить", f"approve_employer:{item_id}:{version}"), button("Запросить уточнение", f"reject_employer:{item_id}:{version}")])
+                if employer["source_url"]:
+                    rows.append([{"text": "🔗 Источник", "url": employer["source_url"]}])
+                rows.append([button("Организации", "queue:employers:0")])
+                self.send(user_id, f"<b>Организация</b>\n\n{text(employer['company'])}\n{text(employer['contact'])}\n{text(employer['employer_city'])}\n\n{EMPLOYERS[employer['employer_status']]}", rows)
             elif action == "approve_employer":
                 self.s.execute("UPDATE members SET employer_status='approved' WHERE id=?", (item_id,))
                 self.send(item_id, "<b>Организация подтверждена</b>\nТеперь вы можете предложить вакансию.", [[button("Предложить вакансию", "new:vacancy")]])
@@ -720,7 +780,7 @@ class Bot:
                 self.s.execute("UPDATE applications SET status='in_progress' WHERE id=?", (item_id,))
                 self.send(app["user_id"], f"Координатор взял заявку №{item_id} в работу.")
                 self.application(user_id, item_id)
-            elif action == "done" and not app["vacancy_id"]:
+            elif action == "done" and (not app["vacancy_id"] or app["employer_id"] < 0):
                 self.s.execute("UPDATE applications SET status='done' WHERE id=?", (item_id,))
                 self.send(app["user_id"], f"Заявка №{item_id} завершена. Если появилась новая задача, можно отправить ещё одну заявку.")
                 self.application(user_id, item_id)
@@ -751,4 +811,5 @@ class Bot:
                 return
             self.s.execute("UPDATE vacancies SET status='rejected' WHERE id=?", (item_id,))
             self.send(job["employer_id"], f"<b>Вакансия №{item_id} отклонена</b>\n\n{text(data['body'])}", [[button("Предложить новую вакансию", "new:vacancy")]])
-        self.send(user_id, "Сообщение отправлено.", [[button("Кабинет координатора", "admin")]])
+        saved_demo = kind == "reply" and app["is_demo"]
+        self.send(user_id, "Учебный ответ сохранён. Сообщения никому не отправлялись." if saved_demo else "Сообщение отправлено.", [[button("Кабинет координатора", "admin")]])

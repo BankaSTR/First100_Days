@@ -51,6 +51,20 @@ class Store:
         self.db.execute("PRAGMA foreign_keys=ON")
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
+        # Additive migration keeps existing registrations, drafts and applications.
+        with self.transaction():
+            additions = {
+                "members": {"origin": "TEXT NOT NULL DEFAULT 'telegram'", "source_url": "TEXT NOT NULL DEFAULT ''"},
+                "vacancies": {"source_url": "TEXT NOT NULL DEFAULT ''", "source_checked_on": "TEXT NOT NULL DEFAULT ''", "seed_key": "TEXT"},
+                "applications": {"is_demo": "INTEGER NOT NULL DEFAULT 0", "seed_key": "TEXT"},
+            }
+            for table, columns in additions.items():
+                existing = {row["name"] for row in self.all(f"PRAGMA table_info({table})")}
+                for column, definition in columns.items():
+                    if column not in existing:
+                        self.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            self.execute("CREATE UNIQUE INDEX IF NOT EXISTS vacancy_seed_key ON vacancies(seed_key)")
+            self.execute("CREATE UNIQUE INDEX IF NOT EXISTS application_seed_key ON applications(seed_key)")
 
     @contextmanager
     def transaction(self):
