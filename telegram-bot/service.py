@@ -193,7 +193,7 @@ class Bot:
         value = message.get("text", "").strip()
         command = value.split(maxsplit=1)[0].split("@")[0].lower() if value else ""
         if command == "/id":
-            self.send(user_id, f"Твой Telegram ID - <code>{user_id}</code>.\nДля работы в кабинете координатора добавьте этот ID в TELEGRAM_ADMIN_IDS.")
+            self.send(user_id, f"Твой Telegram ID - <code>{user_id}</code>.")
         elif command in ("/start", "/menu"):
             self.menu(user_id)
         elif command == "/admin":
@@ -201,7 +201,7 @@ class Bot:
         elif command == "/privacy":
             self.privacy(user_id)
         elif command == "/help":
-            self.send(user_id, "<b>Как пользоваться ботом</b>\n\nВыбери роль и заполни короткую анкету. После регистрации можно отправить заявку или отклик.\n\n/menu - открыть меню\n/cancel - отменить заполнение\n/id - узнать свой ID\n/privacy - какие данные сохраняются\n\nЕсли ошибся в анкете, нажми «Назад». Перед отправкой покажу всё целиком.", [[button("Открыть меню", "menu")]])
+            self.send(user_id, "<b>Как пользоваться ботом</b>\n\nВыбери роль и заполни короткую анкету. После регистрации можно отправить заявку или отклик.\n\n/menu - открыть меню\n/cancel - отменить заполнение\n/privacy - какие данные сохраняются\n\nЕсли ошибся в анкете, нажми «Назад». Перед отправкой покажу всё целиком.", [[button("Открыть меню", "menu")]])
         elif command == "/cancel":
             if self.flow(user_id):
                 self.cancel_prompt(user_id)

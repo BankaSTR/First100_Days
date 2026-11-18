@@ -63,7 +63,6 @@ def run(config, check=False):
                 {"command": "cancel", "description": "Отменить заполнение"},
                 {"command": "help", "description": "Как пользоваться ботом"},
                 {"command": "privacy", "description": "Как используются данные"},
-                {"command": "id", "description": "Мой Telegram ID"},
             ]})
             api.call("setMyDescription", {"description": "Первые 100 дней - подготовка к самостоятельной жизни. Регистрация участников и работодателей, заявки на помощь, проверенные вакансии и отклики. Нажми «Начать»."})
             api.call("setMyShortDescription", {"short_description": "Регистрация, заявки на помощь и первая работа. Программа «Первые 100 дней»."})
