@@ -80,19 +80,28 @@ class SeedTest(unittest.TestCase):
         self.bot.action(1, f"participant:{uid}")
         self.assertIn("доступно координатору", self.payloads()[-1]["text"])
         self.bot.action(100, f"participant:{uid}")
-        self.assertIn("вымышленные данные", self.payloads()[-1]["text"])
+        self.assertIn("Анкета участника", self.payloads()[-1]["text"])
+        self.assertNotIn("Учебный пример", self.payloads()[-1]["text"])
+        self.assertNotIn("вымышленные данные", self.payloads()[-1]["text"])
         app = self.s.one("SELECT id FROM applications WHERE is_demo=1 AND status='new'")[0]
         self.bot.application(100, app)
-        self.assertIn("Учебный пример", self.payloads()[-1]["text"])
+        self.assertNotIn("Учебный пример", self.payloads()[-1]["text"])
         self.bot.submit_admin(100, "reply", {"id": app, "body": "Учебный ответ"})
-        self.assertIn("Учебный ответ сохранён", self.payloads()[-1]["text"])
+        self.assertIn("Ответ сохранён", self.payloads()[-1]["text"])
         self.assertTrue(all(item["chat_id"] > 0 for item in self.payloads()))
+        self.bot.admin_menu(100)
+        summary = self.payloads()[-1]["text"]
+        self.assertEqual(summary.count("Демонстрационные данные:"), 1)
+        self.assertIn("анкеты и заявки вымышлены", summary)
+        self.assertIn("Активные заявки - 0", summary)
+        self.assertEqual(self.s.one("SELECT is_demo FROM applications WHERE id=?", (app,))[0], 1)
 
     def test_all_catalogue_sections_paginate_and_sources_open_as_urls(self):
         seed(self.s, True)
         for kind in ("employers", "vacancies", "participants", "applications"):
             self.bot.queue(100, kind, 0)
             keyboard = self.payloads()[-1]["reply_markup"]["inline_keyboard"]
+            self.assertFalse(any("учебн" in item["text"].lower() for row in keyboard for item in row))
             self.assertTrue(any(item.get("callback_data") == f"queue:{kind}:1" for row in keyboard for item in row))
             self.bot.queue(100, kind, 1)
             self.assertNotIn("пока пусто", self.payloads()[-1]["text"])

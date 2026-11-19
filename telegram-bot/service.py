@@ -606,8 +606,6 @@ class Bot:
         snapshot = json.loads(app["snapshot"])
         identity = snapshot["name"] or snapshot["contact"]
         body = f"<b>Заявка №{app_id} · {STATES[app['status']]}</b>\n{text(app['topic'])}\n\n{text(identity)}"
-        if app["is_demo"]:
-            body = "🧪 <b>Учебный пример · вымышленные данные</b>\n\n" + body
         if snapshot["age"]:
             body += " · " + text(snapshot["age"]) + " · " + text(snapshot["city"])
         body += "\n\n" + text(app["body"])
@@ -617,7 +615,11 @@ class Bot:
             if job["status"] == "catalog":
                 body += "\nОтклик передан координатору. Компания пока не подключена к боту."
         if app["response"]:
-            body += "\n\n<b>Ответ координатора</b>\n" + text(app["response"])
+            response = app["response"]
+            if app["is_demo"] and response.startswith("Учебный пример: "):
+                response = response.removeprefix("Учебный пример: ")
+                response = response[:1].upper() + response[1:]
+            body += "\n\n<b>Ответ координатора</b>\n" + text(response)
         rows = []
         if job:
             rows.append([button("К вакансии", f"job:{app['vacancy_id']}")])
@@ -670,7 +672,8 @@ class Bot:
         if counts[3]:
             rows.append([button("Повторить доставку сообщений", "retry_notifications")])
         rows.append([button("Меню", "menu")])
-        self.send(user_id, f"<b>Кабинет координатора</b>\n\nОрганизации на проверке - {counts[0]}\nВакансии на проверке - {counts[1]}\nАктивные заявки - {counts[2]}\nУчастники - {totals[0]}\nНедоставленные сообщения - {counts[3]}\n\n<b>Каталог</b>\nОрганизации - {totals[2]}\nВакансии - {totals[4]}\n\n<b>Учебные примеры</b>\nУчастники - {totals[1]}\nЗаявки - {totals[3]}", rows)
+        demo_note = (f"\n\n<b>Демонстрационные данные: анкеты и заявки вымышлены.</b>\nАнкеты - {totals[1]}\nЗаявки - {totals[3]}" if totals[1] or totals[3] else "")
+        self.send(user_id, f"<b>Кабинет координатора</b>\n\nОрганизации на проверке - {counts[0]}\nВакансии на проверке - {counts[1]}\nАктивные заявки - {counts[2]}\nУчастники - {totals[0]}\nНедоставленные сообщения - {counts[3]}\n\n<b>Каталог</b>\nОрганизации - {totals[2]}\nВакансии - {totals[4]}" + demo_note, rows)
 
     def participant_card(self, user_id, participant_id):
         if user_id not in self.config.admin_ids:
@@ -680,9 +683,8 @@ class Bot:
         if not person or not (person["consent_at"] or person["origin"] == "demo"):
             self.send(user_id, "Анкета недоступна.")
             return
-        badge = "🧪 <b>Учебный пример · вымышленные данные</b>\n\n" if person["origin"] == "demo" else ""
         body = "\n".join(f"<b>{field.label}</b> - {text(person[field.key])}" for field in FORMS["participant"])
-        self.send(user_id, badge + "<b>Анкета участника</b>\n\n" + body, [[button("Участники", "queue:participants:0"), button("Кабинет координатора", "admin")]])
+        self.send(user_id, "<b>Анкета участника</b>\n\n" + body, [[button("Участники", "queue:participants:0"), button("Кабинет координатора", "admin")]])
 
     def queue(self, user_id, kind, page):
         if user_id not in self.config.admin_ids:
@@ -702,9 +704,7 @@ class Bot:
         for item in items[:5]:
             label = item["title"][:32]
             if kind == "applications":
-                label = ("Учебная · " if item["is_demo"] else "") + f"№{item['id']} · {STATES[item['status']]}"
-            elif kind == "participants" and item["origin"] == "demo":
-                label += " · учебный пример"
+                label = f"№{item['id']} · {STATES[item['status']]}"
             elif kind in ("employers", "vacancies"):
                 label += " · " + (EMPLOYERS if kind == "employers" else JOBS)[item["status"]]
             rows.append([button(label, f"{prefix}:{item['id']}")])
@@ -812,4 +812,4 @@ class Bot:
             self.s.execute("UPDATE vacancies SET status='rejected' WHERE id=?", (item_id,))
             self.send(job["employer_id"], f"<b>Вакансия №{item_id} отклонена</b>\n\n{text(data['body'])}", [[button("Предложить новую вакансию", "new:vacancy")]])
         saved_demo = kind == "reply" and app["is_demo"]
-        self.send(user_id, "Учебный ответ сохранён. Сообщения никому не отправлялись." if saved_demo else "Сообщение отправлено.", [[button("Кабинет координатора", "admin")]])
+        self.send(user_id, "Ответ сохранён." if saved_demo else "Сообщение отправлено.", [[button("Кабинет координатора", "admin")]])

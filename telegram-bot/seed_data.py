@@ -61,7 +61,7 @@ def seed(store, with_demo=False, catalogue=None):
                     store.execute("INSERT INTO members(id,name,age,city,goal,origin,created_at) VALUES (?,?,?,?,?,'demo',?)", (uid, name, age, city, goal, now))
                     store.execute("INSERT INTO meta(key,value) VALUES (?,?)", (key, str(uid)))
                 snapshot = {"name": name, "age": age, "city": city, "company": "", "contact": "", "role": "participant"}
-                response = "Учебный пример: вместе со специалистом разобрали задачу и составили следующий шаг." if status == "done" else ""
+                response = "Вместе со специалистом разобрали задачу и составили следующий шаг." if status == "done" else ""
                 store.execute("INSERT OR IGNORE INTO applications(user_id,topic,body,snapshot,status,response,created_at,is_demo,seed_key) VALUES (?,?,?,?,?,?,?,1,?)",
                               (uid, topic, body, json.dumps(snapshot, ensure_ascii=False), status, response, now, f"demo:application:{index}"))
     return store.db.total_changes - before
