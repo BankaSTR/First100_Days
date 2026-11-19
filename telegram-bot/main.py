@@ -9,6 +9,7 @@ import threading
 import time
 
 from config import Config
+from bootstrap import restore_database
 from service import Bot
 from store import Store
 from telegram import Telegram, TelegramError
@@ -54,6 +55,8 @@ def run(config, check=False):
         log.info("Токен верный, бот готов к long polling.")
         return
     with single_instance(config.database):
+        if restore_database(config.database):
+            log.info("База перенесена на постоянный диск. Существующие анкеты и заявки сохранены.")
         store = Store(config.database)
         try:
             bot = Bot(store, config)
