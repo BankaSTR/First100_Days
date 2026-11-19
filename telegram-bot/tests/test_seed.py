@@ -62,7 +62,7 @@ class SeedTest(unittest.TestCase):
         self.assertIn("поможет связаться", self.payloads()[0]["text"])
         app = self.s.one("SELECT id FROM applications WHERE is_demo=0")[0]
         self.bot.application(100, app)
-        self.assertIn("Компания пока не подключена", self.payloads()[-1]["text"])
+        self.assertIn("поможет связаться с работодателем", self.payloads()[-1]["text"])
         self.bot.management(100, "done", app)
         self.assertEqual(self.s.one("SELECT status FROM applications WHERE id=?", (app,))[0], "done")
 

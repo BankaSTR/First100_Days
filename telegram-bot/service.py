@@ -371,7 +371,7 @@ class Bot:
                 note = f"\n\nРаботодателю будут переданы имя {text(user['name'])}, возрастная группа {text(user['age'])}, город {text(user['city'])} и этот отклик."
                 job = self.s.one("SELECT status FROM vacancies WHERE id=?", (data["vacancy_id"],))
                 if job and job["status"] == "catalog":
-                    note = "\n\nАнкету и отклик получит координатор. Компания пока не подключена к боту. Координатор поможет связаться с ней."
+                    note = "\n\nАнкету и отклик получит координатор. Он поможет связаться с работодателем."
             self.send(user_id, "<b>Проверь перед отправкой</b>\n\n" + summary + note, [[button("Отправить", prefix + "send")], [button("Назад · Исправить", prefix + "back"), button("Отмена", prefix + "cancel_prompt")]])
             return
         field = fields[step]
@@ -496,7 +496,7 @@ class Bot:
         cursor = self.s.execute("INSERT INTO applications(user_id,vacancy_id,topic,body,snapshot,created_at) VALUES (?,?,?,?,?,?)", (user_id, vacancy_id, data.get("topic", "Отклик на вакансию"), data["body"], json.dumps(snapshot, ensure_ascii=False), int(time.time())))
         app_id = cursor.lastrowid
         rows = [[button("Открыть заявку", f"application:{app_id}")]]
-        recipient_note = "Координатор поможет связаться с компанией. " if vacancy_id and job["status"] == "catalog" else ""
+        recipient_note = "Координатор поможет связаться с работодателем. " if vacancy_id and job["status"] == "catalog" else ""
         self.send(user_id, f"<b>Заявка №{app_id} отправлена</b>\n\n{recipient_note}Статус - получена. Ответ придёт сюда. Следить за заявкой можно в меню.", rows)
         self.admins(f"<b>Новая заявка №{app_id}</b>\n" + text(data.get("topic", "Отклик на вакансию")), rows)
         if vacancy_id:
@@ -561,7 +561,7 @@ class Bot:
                 f"Город - {text(job['city'])}\nГрафик - {text(job['schedule'])}\nОплата - {text(job['pay'])}\nВозраст - {text(age)}\n\n{text(job['description'])}\n\nСтатус - {JOBS[job['status']]}")
         rows = []
         if job["source_url"]:
-            body += f"\n\nПодборка от {text(job['source_checked_on'])}. Компания пока не подключена к боту. Наличие места и условия уточняются."
+            body += f"\n\nПодборка от {text(job['source_checked_on'])}. Наличие места и условия уточняются.\nКоординатор поможет связаться с работодателем."
             rows.append([{"text": "🔗 Источник", "url": job["source_url"]}])
         if admin and job["status"] == "pending":
             rows.append([button("Опубликовать", f"approve_vacancy:{vacancy_id}"), button("Отклонить", f"reject_vacancy:{vacancy_id}")])
@@ -613,7 +613,7 @@ class Bot:
         if job:
             body += f"\n\n<b>Вакансия</b>\n{text(job['title'])} · {text(job['company'])}"
             if job["status"] == "catalog":
-                body += "\nОтклик передан координатору. Компания пока не подключена к боту."
+                body += "\nОтклик передан координатору. Он поможет связаться с работодателем."
         if app["response"]:
             response = app["response"]
             if app["is_demo"] and response.startswith("Учебный пример: "):
